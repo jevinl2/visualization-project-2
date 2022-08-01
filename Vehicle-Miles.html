@@ -1,0 +1,864 @@
+﻿<!DOCTYPE html>
+<head>
+    <title>The Title Goes Here</title>
+</head>
+<script src='https://d3js.org/d3.v5.min.js'></script>
+<script src="https://rawgit.com/susielu/d3-annotation/master/d3-annotation.js"></script>
+<link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+<link rel="stylesheet" href="https://www.w3schools.com/lib/w3-colors-flat.css">
+<style>
+    h1 {
+        text-align: center;
+    }
+    h2 {
+        font-size: 20px;
+    }
+    p1 {
+        text-indent: 50px;
+        text-align: justify;
+        letter-spacing: 3px;
+    }
+    .note {
+        color: purple;
+        margin-left: 40px;
+        font-style: italic;
+    }
+    .cylndDiv {
+        position: relative;
+        z-index: 9;
+        background: papayawhip;
+        width: 1200px;
+    }
+    .cmakeDiv {
+        position: relative;
+        z-index: 9;
+        background: mintcream;
+        width: 1200px;
+    }
+    circle {
+        fill: lightblue;
+        stroke: black;
+    }
+    cylcircle {
+        fill: lightblue;
+        stroke: black;
+    }
+        cylcircle.tooltip {
+            position: absolute;
+            text-align: center;
+            width: 60px;
+            height: 28px;
+            padding: 2px;
+            font: 12px sans-serif;
+            background: lightsteelblue;
+            border: 0px;
+            border-radius: 8px;
+            pointer-events: none;
+        }
+</style>
+<body onload='init()'>
+    <div class="w3-container w3-flat-turquoise">
+        <h1><b>The Mileage Difference Between City and Highway Driving</b></h1>
+        <p>Despite continuing advancements in hybrid and electric-car technology, the good old-fashioned internal-combustion engine is still great. In fact, affordable, fuel-efficient, gasoline-powered cars still outnumber electric cars. The fuel economy of a vehicle takes into account the miles traveled by car and the amount of gasoline consumed while doing traveling. Generally, you get better gas mileage on highways rather than on city streets. For those who want to spend less on gasoline without forking over big money on a hybrid or electric vehicle, this page shows the comprehensive statistics of fuel consumption by different engine cylinders of car models.</p>
+    </div>
+    <br />
+    <span class="note" Onclick="backMain()" class="menuOpen">< back to the general chart</span>
+    
+    <svg id="chart" width=1000 height=500>
+    </svg>
+    <div class="cylndDiv">
+        <p>
+            <h2><b>Mileage Comparison on Engine Cylinders Made by Different manufacturers</b></h2>
+            The circles represent the number of car cylinders in arrangment from smallest to largest the size of the circle. Click on a circle below to view gas mileages of an engine cylinder by the most popular car brands.
+        </p>
+    </div>
+    <div id="CylContainer" class="b"><svg id="cylinder" width="1000" height="60"></svg></div>
+
+    <div class="cmakeDiv">
+        <p>
+            <h2><b>Mileage Comparison on all Engine Cylinders Made by Individual manufacturers</b></h2>
+            The colored segments on the band each represent a car manufactuer. Click on one color to view gas mileages of all engine cylinders by a car brand.
+        </p>
+    </div>
+    <svg id="carMake" width="1000" height="100"></svg>
+
+    <script>
+        async function init() {
+            d3.csv("https://flunky.github.io/cars2017.csv", function (data) {
+                //data = data.filter(function (d) {
+                //    return d.EngineCylinders = 4
+                //})
+                return {
+                    carMake: data.Make,
+                    fuel: data.Fuel,
+                    cylinders: data.EngineCylinders,
+                    highwayMPG: data.AverageHighwayMPG,
+                    cityMPG: data.AverageCityMPG
+                }
+            }).then(function (fullData) {
+                //if (error) {
+                //    return console.warn(error);
+                //}
+
+                //=========================================================================
+                // munipulate data by group and sum, filter, etc.
+                //=========================================================================
+
+                // get all distinct names of manufacturers
+                var listCarMage = d3.map(fullData, function (d) { return (d.carMake) }).keys();
+                // d3.map(data, function (d) { return d.roadname; }).keys()
+                //var allGroup = [...new Set(d.map(d => d.carMake))];
+
+                var listCylinder = d3.map(fullData, function (d) { return (d.cylinders) }).keys();
+                listCylinder = listCylinder.sort(function (a, b) { return a - b });
+
+                // sum mileages of all cylinders grouping by manufacturer using rollup function
+                var allAgregation = d3.nest().key(function (d) {
+                    return d.carMake;
+                })
+                    .rollup(function (leaves) {
+                        return {
+                            highwayMPG: d3.sum(leaves, function (d) { return d.highwayMPG; }),
+                            cityMPG: d3.sum(leaves, function (d) { return d.cityMPG; })
+                        }
+                    }).entries(fullData)
+                    .map(function (d) {
+                        return { carMake: d.key, cityMPG: d.value.cityMPG, highwayMPG: d.value.highwayMPG };
+                    });
+
+                headers = [];
+                headers.push('carMake');
+                headers.push('totalMileage');
+
+                var aggreWithHeader = allAgregation.map(function (_, i) {
+                    return headers.map(function (header) {
+                        return allAgregation[i][header]
+                    }.bind(this))
+                }.bind(this))
+
+                //d3.rollups(
+                //    fullData,
+                //    xs => d3.sum(xs, x => x.highwayMPG),
+                //    d => d.carMake
+                //)
+                //    .map(([k, v]) => ({ carMake: k, Value: v }))
+
+                // sum the highway mileage column and the city mileage column
+                var dataHighwayCitySum = fullData.map(function (d) {
+                    var mySum = 0;
+                    for (var o in d) {          // iterate all the properties of d
+                        if (o === "carMake" || o === "fuel" || o == "cylinders") continue; // if it's our key field skip it
+                        else mySum += +d[o];    // everyone else into the sum
+                    }
+                    return {
+                        carMake: d.carMake,
+                        fuel: d.fuel,
+                        cylinders: d.cylinders,
+                        totalMil: mySum
+                    };
+                })
+
+                // get total mileage (both highway and city) of all cylinders from each manufacturer
+                var agrCarMake = d3.nest().key(function (d) {
+                    return d.carMake;
+                })
+                    .rollup(function (leaves) {
+                        return d3.sum(leaves, function (d) { return d.totalMil; })
+                        //});
+                    }).entries(dataHighwayCitySum)
+                    .map(function (d) {
+                        return { carMake: d.key, cityMPG: d.value.cityMPG, highwayMPG: d.value.highwayMPG };
+                    });
+
+                // filter by manufacturer name
+                dataByCarMake = fullData.filter(function (d) {
+                    //return d.cylinders == 4
+                    return d.carMake == "BMW"
+                })
+
+
+                //=================================================================
+                //create main chart/graph
+                //=================================================================
+                var width = 1000
+                height = 400
+                margin = 50;
+
+                var x_domain = [10, 150]
+                x_range = [0, width]
+                x_ticks = [10, 20, 50, 100, 150]
+                y_domain = [10, 150]
+                y_ticks = [10, 20, 50, 100, 150]
+                y_range = [0, height];
+
+                var x_log = d3.scaleLog()
+                    .domain(x_domain)
+                    .range(x_range)
+
+                var y_log = d3.scaleLog()
+                    .domain(y_domain)
+                    .range(y_range);
+
+                var svg = d3.select('#chart')
+                    .append('g')
+                    .attr('transform', 'translate(50, 50)');
+
+                svg.selectAll('Circle')         //select all elements with class Circle. (There currently are none)
+                    //.data(allAgregation)
+                    .data(fullData)             //attach the data
+                    .enter().append('circle')   //append one circle for each data point
+                    .attr('class', 'circle')    //give each circle class Circle
+                    .attr('r', 8)               //assign radius
+                    // Position the circles based on their x and y attributes.
+                    .attr("cx", function (d) { return x_log(d.cityMPG); })
+                    .attr("cy", function (d) { return height - y_log(d.highwayMPG); })
+                    //.attr("cx", function (d) { return x_logScale(d.highwayMPG); })
+                    //.attr("cy", function (d) { return y_logScale(d.cityMPG); })
+                    //.call(makeAnnotations)
+                    ;
+
+                y_log = d3.scaleLog()
+                    .domain(y_domain)
+                    .range([y_range[1], y_range[0]]);
+
+                var x_axis = d3.axisBottom(x_log)
+                    .tickValues(x_ticks)
+                    //.ticks(4, "~s")
+                    //.tickFormat(d3.format("~s"));
+                    .tickFormat(function (d, i) { return d; });
+
+                var y_axis = d3.axisLeft(y_log)
+                    .tickValues(y_ticks)
+                    //.tickFormat(function (d, i) { return d; });
+                    .tickFormat(d3.format("~s"));
+
+                d3.select('svg')
+                    .append('g')
+                    .attr('transform', 'translate(50,50)')
+                    .call(y_axis);
+                d3.select('svg')
+                    .append('g')
+                    .attr('transform', 'translate(50,450)')
+                    .call(x_axis);
+
+                // add the title
+                svg.append("text")
+                    .attr("x", width/2)
+                    .attr("y", 10)
+                    .attr("text-anchor", "middle")
+                    .attr("font-weight", 700)
+                    .attr("font-family", "Karla")
+                    .style("font-size", "20px")
+                    .style('fill', 'maroon')
+                    .text("Hightway Mileage vs City Mileage");
+
+                // add label to x-axis
+                svg.append("text")
+                    .attr("transform", "translate(" + (width / 2) + " ," + (height - 10) + ")")
+                    .style("text-anchor", "middle")
+                    .style("font-size", "10px")
+                    .text("City Miles per Gallon");
+
+                // add label to y-axis
+                svg.append("text")
+                    .attr("transform", "rotate(-90)")
+                    .attr("x", -(height / 2))
+                    .attr("y", 15)
+                    .style("text-anchor", "middle")
+                    .style("font-size", "10px")
+                    .text("Highway Miles per Gallon");
+
+                // add annotations
+                const annotations = [
+                    {
+                        note: {
+                            label: "The number represents a car cylinders",
+                            title: "Engine Cylinders"
+                        },
+                        x: 100,
+                        y: 100,
+                        //dy: 20,
+                        //dx: 20,
+                        type: d3.annotationCalloutRect //d3.annotationCalloutElbow //
+                    }
+                ]
+
+                var makeAnnotations = d3.annotation()
+                    .accessors({
+                        x: function (d) { return x(d.x) },
+                        y: function (d) { return y(d.y) }
+                    })
+                    .annotations(annotations);
+
+                d3.select('svg')
+                    .append('g')
+                    .attr("class", "annotation-group")
+                    .style('font-size', "15px")
+                    .call(makeAnnotations)
+                    ;
+
+                const ann0Cylinder = [
+                    {
+                        note: {
+                            label: "Electric cars do not have cylinders for their engines",
+                            title: "",
+                            orientation: top
+                        },
+                        //fill: rgba(0, 0, 0, 0),
+                        x: 800,
+                        y: 180,
+                        //dy: 20,
+                        //dx: 20,
+                        type: d3.annotationCalloutCurve //d3.annotationCallout //d3.annotationCalloutElbow //
+                    }
+                ]
+
+                var zeroAnnotations = d3.annotation()
+                    .accessors({
+                        x: function (d) { return x(d.x) },
+                        y: function (d) { return y(d.y) }
+                    })
+                    .annotations(ann0Cylinder);
+
+                d3.select('svg')
+                    .append('g')
+                    .attr("class", "annotation-group")
+                    //.attr("color", "green")
+                    //.style('font-size', "13px")
+                    .style('background - color', '#f1f1f1')
+                    //.style('font-weight', 'bold')
+                    .call(zeroAnnotations)
+                    ;
+
+                //===============================================================================
+                // Display circles representing number of cylinders
+                //===============================================================================
+                var listCylinder = d3.map(fullData, function (d) { return (d.cylinders) }).keys();  //get all cylinders
+                listCylinder = listCylinder.sort(function (a, b) { return a - b });                 // sort the array
+
+                var myData = listCylinder.map(str => {          //listCylinder is an array of string, needs to convert to numbers
+                    return Number(str);
+                });
+
+                var linearScale = d3.scaleLinear()
+                    .domain([0, 100])
+                    .range([0, 700]);
+
+                var sqrtScale = d3.scaleSqrt()
+                    .domain([0, 100])
+                    .range([0, 30]);
+
+                var cylTooltip = d3.select("#CylContainer").append("div")
+                    .attr('id', 'cyltooltip')
+                    .attr("class", "cylcircle.tooltip")
+                    .style("opacity", 0)
+                    .style("background-color", "white")
+                    .style("border", "solid")
+                    .style("border-width", "2px")
+                    .style("border-radius", "5px")
+                    .style("padding", "5px");
+
+                var svg = d3.select('#cylinder')
+                //.attr("width", 500)
+                //.attr("height", 800);
+                svg.append("rect")
+                    .attr("width", "100%")
+                    .attr("height", "100%")
+                    .attr("fill", "white");
+                svg.append('g')
+                    .attr('transform', 'translate(10, 10)');
+
+                svg.selectAll('cylcircle')
+                    .data(myData)
+                    .enter().append('circle')
+                    .attr('class', 'cylcircle')
+                    //.style("fill", function (d) { return colors[d]; });
+                    //.join('cylcircle')
+                    .attr('r', function (d) {
+                        return sqrtScale(((d + 1) * 8));
+                        //return linearScale(d + 1);
+                    })
+                    .attr("cy", 30)
+                    .attr('cx', function (d) {
+                        return linearScale(d * 10 + 10);
+                    })
+                    .on("click", function (d) {
+                        cylinerMileages(d, fullData);   //connect the listener to the click event
+                    })
+                    .on("mouseover", function (d) {
+                        cylTooltip.transition()
+                            .duration(1000)
+                            .style("opacity", 1)
+                        //.html("You've selected " + d + " cylinder cars to view their mileages per gallon."<br>"Please click to view.")
+                        //cylTooltip.html(d + ' Cylinder Cars' + "<br/>")
+                        //cylTooltip.text(d + 'Cylinder Cars')
+                        //.style("left", d3.select(this).attr("cx") + "px")
+                        //.style("top", d3.select(this).attr("cy") + 20 + "px");
+                        //.style("left", (d3.mouse(this)[0]) + "px")
+                        //.style("top", (d3.mouse(this)[1] + 600) + "px");
+                    })
+                    .on('mousemove', function (d) {
+                        d3.select('#cyltooltip')
+                            //.html("The " + d + " cylinder cars")
+                            .html("You've selected " + d + " cylinder cars to view their mileages per gallon.")// < br > "Please click to view.")
+                            //.style('left', d3.event.x + 'px')
+                            //.style('top', d3.event.y + 'px')
+                            .style("left", (d3.mouse(this)[0]) + "px")
+                            .style("top", (d3.mouse(this)[1]) + "px")
+                    })
+                    .on("mouseout", function (d) {
+                        cylTooltip.transition()
+                            .duration(500)
+                            .style("opacity", 0)
+                    });
+
+                //=================================================================================
+                // display colored rectengles representing manufacturers
+                //=================================================================================
+                var coloredCarMakes = colorCarMakes();
+                var colors = Object.keys(coloredCarMakes);
+                var makes = Object.values(coloredCarMakes);
+
+                var xScale = d3.scaleBand()
+                    //.domain(listCarMage)
+                    .domain(colors)
+                    .range([25, 1000]);
+
+                var xAxis = d3.axisBottom(xScale)
+                    .tickValues(colors)
+                    //.tickFormat(function (d, i) { return d; });
+                    ;
+
+                var svg = d3.select("#carMake");
+
+                svg.selectAll("rect")
+                    //.data(makes)
+                    .data(colors)
+                    .enter()
+                    .append("rect")
+                    .attr("x", (d) => xScale(d))
+                    .attr("y", 10)
+                    .attr("width", xScale.bandwidth())
+                    .attr("height", 30)
+                    .attr("fill", (d) => d)
+                    .on("click", function (d) {
+                        carMakeMileages(d, fullData);
+                    })
+                    ;
+
+                var xScale1 = d3.scaleBand()
+                    .range([25, 1000])
+                    .domain(makes)
+                    .padding(0.2)
+
+                svg.append("g")
+                    .attr("transform", "translate(0,35)")
+                    .call(xScale1);
+
+                svg.selectAll("text")
+                    .data(makes)
+                    .enter().append("text")
+                    .attr("x", (d) => xScale1(d) + 10)
+                    .attr("y", 50)
+                    .text(function (d) { return d })
+                //.attr('dx', 5) //moves text 10px (right) on the x axis
+                //.attr('dy', -10) //moves text -10px (up) on the y axis
+            }
+            );
+        }
+
+        var colorCarMakes = function () {
+            let coloredCarMakes = {};
+
+            var colors = ["red", "orange", "green", "blue", "purple", "grey", "aliceblue", "antiquewhite", "aqua", "coral", "aquamarine", "salmon", "thistle", "violet", "fuchsia", "skyblue"];
+            var listCarMakes = ["Acura", "BMW", "Honda", "Ford", "Toyota", "Audi", "Cadillac", "Tesla", "Chrysler", , "Nissan", "Jeep", "Dodge", "Chevrolet", "Kia", "Mercedes-Benz"];
+
+            listCarMakes.forEach(function (item, index) {
+                coloredCarMakes[colors[index]] = item;
+            });
+
+            return coloredCarMakes;
+        }
+
+        var cylinerMileages = function (cylinder, fullData) {
+
+            d3.selectAll('svg > g > *').remove();       //remove the current graph
+            //d3.selectAll("svg > *").remove();
+            //var svg = d3.select("svg");
+            //svg.selectAll("*").remove();
+
+            var sameCylinerCars = fullData.filter(d => d.cylinders == cylinder); //filter the data by the given cylinder number
+            //sameCylinerCars = fullData.filter(function (d, cylinder) {
+            //    return d.cylinders == cylinder
+            //})
+
+            //var listCarMage = d3.map(fullData, function (d) { return (d.carMake) }).keys();
+
+            var width = 1000
+            height = 400
+            margin = 50;
+
+            var x_domain = [10, 150]
+            x_range = [0, width]
+            x_ticks = [10, 20, 50, 100, 150]
+
+            y_domain = [10, 150]
+            if (cylinder !== 0)
+                y_domain = [10, 45]
+            y_ticks = [10, 20, 50, 100, 150]
+            y_range = [0, height];
+
+            //var subgroups = sameCylinerCars.columns.slice(3)
+            var subgroups = ["highwayMPG", "cityMPG"];
+
+            // List of groups = the list of manufacturers
+            var groups = d3.map(sameCylinerCars, function (d) { return (d.carMake) }).keys();
+
+            //var subdata = subgroups.map(function (key) { return { key: key, value: sameCylinerCars[key] }; });
+
+            var svg = d3.select('svg')
+                .append('g')
+                .attr('transform', 'translate(50, 50)');
+
+            // Add X axis
+            var x = d3.scaleBand()
+                .domain(groups)
+                .range([0, width])
+                .padding([0.2])
+
+            svg.append("g")
+                .attr("transform", "translate(0," + height + ")")
+                .call(d3.axisBottom(x).tickSize(0));
+
+            // Add Y axis
+            var y = d3.scaleLinear()
+                .domain(y_domain)
+                .range([height, 0]);
+
+            svg.append("g")
+                .call(d3.axisLeft(y));
+
+            // Another scale for subgroup position?
+            var xSubgroup = d3.scaleBand()
+                .domain(subgroups)
+                .range([0, x.bandwidth()])
+                .padding([0.05])
+
+            // color palette = one color per subgroup
+            var color = d3.scaleOrdinal()
+                .domain(subgroups)
+                .range(['#e41a1c', '#377eb8'])
+
+            // Show the bars
+            svg.append("g")
+                .selectAll("g")
+                // Enter in data = loop group per group
+                .data(sameCylinerCars)
+                .enter()
+                .append("g")
+                .attr("transform", function (d) { return "translate(" + x(d.carMake) + ",0)"; })
+                .selectAll("rect")
+                .data(function (d) { return subgroups.map(function (key) { return { key: key, value: d[key] }; }); })
+                .enter().append("rect")
+                .attr("x", function (d) { return xSubgroup(d.key); })
+                .attr("y", function (d) { return y(d.value); })
+                .attr("width", xSubgroup.bandwidth())
+                .attr("height", function (d) { return height - y(d.value); })
+                .attr("fill", function (d) { return color(d.key); });
+
+            // add label to y-axis
+            svg.append("text")
+                //.attr("transform", "rotate(-90)")
+                //.attr("x", -(height / 2))
+                .attr("x", 30)
+                .attr("y", -15)
+                .style("text-anchor", "middle")
+                .style("font-size", "15px")
+                .text("Aeverage Miles");
+
+            // add legend
+            svg.append("circle").attr("cx", 700).attr("cy", 10).attr("r", 6).style("fill", "#e41a1c")
+            svg.append("circle").attr("cx", 700).attr("cy", 40).attr("r", 6).style("fill", "#377eb8")
+            svg.append("text").attr("x", 720).attr("y", 10).text("Highway Miles per Gallon").style("font-size", "15px").attr("alignment-baseline", "middle")
+            svg.append("text").attr("x", 720).attr("y", 40).text("City Miles per Gallon").style("font-size", "15px").attr("alignment-baseline", "middle")
+
+            if (cylinder == 0) { //add annotation
+                const annotations = [
+                    {
+                        note: {
+                            label: "Electric cars are measured by miles per gallon equivalent. Unusually, they tend to have higher mileage on city roads",
+                            title: "Electric Engines"
+                        },
+                        x: 150,
+                        y: 150,
+                        dy: 20,
+                        dx: 20,
+                        subject: {
+                            radius: 80,
+                            radiusPadding: 5
+                        },
+                        color: 'lime',
+                        type: d3.annotationCalloutCircle //d3.annotationCalloutElbow //
+                    }
+                ]
+
+                var makeAnnotations = d3.annotation()
+                    .accessors({
+                        x: function (d) { return x(d.x) },
+                        y: function (d) { return y(d.y) }
+                    })
+                    .annotations(annotations);
+
+                d3.select('svg')
+                    .append('g')
+                    .attr("class", "annotation-group")
+                    .style('fill', 'maroon')
+                    //.attr("transform", "rotate(-180)")
+                    //annotation - context - color
+                    .style('font-size', "15px")
+                    .call(makeAnnotations)
+                    ;
+            }
+            else if (cylinder == 4) {
+                const annotations = [
+                    {
+                        note: {
+                            label: "Lexus 4 cylinder cars have average higher mileage in city than on highway",
+                            title: ""
+                        },
+                        x: 660,
+                        y: 150,
+                        dy: 20,
+                        dx: 20,
+                        subject: {
+                            radius: 30,
+                            radiusPadding: 5
+                        },
+                        orientation: top,
+                        color: 'lime',
+                        type: d3.annotationCalloutCircle //d3.annotationCalloutElbow //
+                    }
+                ]
+
+                var makeAnnotations = d3.annotation()
+                    .accessors({
+                        x: function (d) { return x(d.x) },
+                        y: function (d) { return y(d.y) }
+                    })
+                    .annotations(annotations);
+
+                d3.select('svg')
+                    .append('g')
+                    .attr("class", "annotation-group")
+                    .style('fill', 'maroon')
+                    //.attr("transform", "rotate(-180)")
+                    //annotation - context - color
+                    .style('font-size', "15px")
+                    .call(makeAnnotations)
+                    ;
+            }
+
+            //===============================================================================================================================
+            //var ageNames = d3.keys(data[0]).filter(function (key) { return key !== "State"; });
+
+            //data.forEach(function (d) {
+            //    d.ages = ageNames.map(function (name) { return { name: name, value: +d[name] }; });
+            //});
+
+            //x0.domain(data.map(function (d) { return d.State; }));
+            //x1.domain(ageNames).rangeRoundBands([0, x0.rangeBand()]);
+            //y.domain([0, d3.max(data, function (d) { return d3.max(d.ages, function (d) { return d.value; }); })]);
+
+            //svg.append("g")
+            //    .attr("class", "x axis")
+            //    .attr("transform", "translate(0," + height + ")")
+            //    .call(xAxis);
+
+            //svg.append("g")
+            //    .attr("class", "y axis")
+            //    .call(yAxis)
+            //    .append("text")
+            //    .attr("transform", "rotate(-90)")
+            //    .attr("y", 6)
+            //    .attr("dy", ".71em")
+            //    .style("text-anchor", "end")
+            //    .text("Population");
+
+            //var state = svg.selectAll(".state")
+            //    .data(data)
+            //    .enter().append("g")
+            //    .attr("class", "state")
+            //    .attr("transform", function (d) { return "translate(" + x0(d.State) + ",0)"; });
+
+            //state.selectAll("rect")
+            //    .data(function (d) { return d.ages; })
+            //    .enter().append("rect")
+            //    .attr("width", x1.rangeBand())
+            //    .attr("x", function (d) { return x1(d.name); })
+            //    .attr("y", function (d) { return y(d.value); })
+            //    .attr("height", function (d) { return height - y(d.value); })
+            //    .style("fill", function (d) { return color(d.name); });
+
+            //var legend = svg.selectAll(".legend")
+            //    .data(ageNames.slice().reverse())
+            //    .enter().append("g")
+            //    .attr("class", "legend")
+            //    .attr("transform", function (d, i) { return "translate(0," + i * 20 + ")"; });
+
+            //legend.append("rect")
+            //    .attr("x", width - 18)
+            //    .attr("width", 18)
+            //    .attr("height", 18)
+            //    .style("fill", color);
+
+            //legend.append("text")
+            //    .attr("x", width - 24)
+            //    .attr("y", 9)
+            //    .attr("dy", ".35em")
+            //    .style("text-anchor", "end")
+            //    .text(function (d) { return d; });
+
+            //});
+        }
+
+        var carMakeMileages = function (color, fullData) {
+            var coloredCarMakes = colorCarMakes();
+            var carMake = coloredCarMakes[color];                   // call the function to get manufacturer corresponding to the color
+
+            var dataByCarMake = fullData.filter(function (d) {      //filter the data by the manufacturer
+                return d.carMake == carMake
+            })
+            dataByCarMake = dataByCarMake.sort(function (a, b) { return a - b }); // sort by clynder numbers
+
+            var subgroups = ["highwayMPG", "cityMPG"];
+
+            // List of groups = engin cylinders by a given manufacturer
+            var groups = d3.map(dataByCarMake, function (d) { return (d.cylinders) }).keys();
+            // OR dataByCarMake.map(function (a) { return a.cylinders; });
+            //var groups = dataByCarMake.cylinders;
+
+            //var subdata = subgroups.map(function (key) { return { key: key, value: dataByCarMake[key] }; });
+
+            var is0There = dataByCarMake.filter(function (data) { return data.cylinders == 0 });
+
+            d3.selectAll('svg > g > *').remove();       //remove the current graph
+
+            var width = 1000
+            height = 400
+            margin = 50;
+
+            var x_domain = [10, 150]
+            x_range = [0, width]
+            x_ticks = [10, 20, 50, 100, 150]
+
+            y_domain = [10, 150]
+            if (is0There == 0) y_domain = [10, 45]
+            y_ticks = [10, 20, 50, 100, 150]
+            y_range = [0, height];
+
+            var svg = d3.select('svg')
+                .append('g')
+                .attr('transform', 'translate(50, 50)');
+
+            // Add X axis
+            var x = d3.scaleBand()
+                .domain(groups)
+                .range([0, width])
+                .padding([0.2])
+
+            svg.append("g")
+                .attr("transform", "translate(0," + height + ")")
+                .call(d3.axisBottom(x).tickSize(0));
+
+            // Add Y axis
+            var y = d3.scaleLinear()
+                .domain(y_domain)
+                .range([height, 0]);
+
+            svg.append("g")
+                .call(d3.axisLeft(y));
+
+            // Another scale for subgroup position?
+            var xSubgroup = d3.scaleBand()
+                .domain(subgroups)
+                .range([0, x.bandwidth()])
+                .padding([0.05])
+
+            // color palette = one color per subgroup
+            var color = d3.scaleOrdinal()
+                .domain(subgroups)
+                .range(['#e41a1c', '#377eb8'])
+
+            // Show the bars
+            svg.append("g")
+                .selectAll("g")
+                // Enter in data = loop group per group
+                .data(dataByCarMake)
+                .enter()
+                .append("g")
+                .attr("transform", function (d) { return "translate(" + x(d.cylinders) + ",0)"; })
+                .selectAll("rect")
+                .data(function (d) { return subgroups.map(function (key) { return { key: key, value: d[key] }; }); })
+                .enter().append("rect")
+                .attr("x", function (d) { return xSubgroup(d.key); })
+                .attr("y", function (d) { return y(d.value); })
+                .attr("width", xSubgroup.bandwidth())
+                .attr("height", function (d) { return height - y(d.value); })
+                .attr("fill", function (d) { return color(d.key); });
+
+            // add label to x-axis
+            svg.append("text")
+                .attr("transform", "translate(" + (width / 2) + " ," + (height + 30) + ")")
+                .style("text-anchor", "middle")
+                .style("font-size", "10px")
+                .text("The number of cylinders");
+
+            // add label to y-axis
+            svg.append("text")
+                .attr("transform", "rotate(-90)")
+                .attr("x", -(height / 2))
+                .attr("y", 15)
+                .style("text-anchor", "middle")
+                .style("font-size", "10px")
+                .text("Aeverage Miles per Gallon");
+
+            svg.append("circle").attr("cx", 700).attr("cy", 10).attr("r", 6).style("fill", "#e41a1c")
+            svg.append("circle").attr("cx", 700).attr("cy", 40).attr("r", 6).style("fill", "#377eb8")
+            svg.append("text").attr("x", 720).attr("y", 10).text("Highway Miles per Gallon").style("font-size", "15px").attr("alignment-baseline", "middle")
+            svg.append("text").attr("x", 720).attr("y", 40).text("City Miles per Gallon").style("font-size", "15px").attr("alignment-baseline", "middle")
+
+            const annCarMake = [
+                {
+                    note: {
+                        label: "All cars of the brand name: " + carMake,
+                        title: ""
+                    },
+                    //fill: rgba(0, 0, 0, 0),
+                    x: 100,
+                    y: 50,
+                    //dy: 20,
+                    //dx: 20,
+                    type: d3.annotationXYThreshold //d3.annotationCallout //d3.annotationCalloutElbow //
+                }
+            ]
+
+            var zeroAnnotations = d3.annotation()
+                .accessors({
+                    x: function (d) { return x(d.x) },
+                    y: function (d) { return y(d.y) }
+                })
+                .annotations(annCarMake);
+
+            d3.select('svg')
+                .append('g')
+                .attr("class", "annotation-group")
+                .call(zeroAnnotations)
+                ;
+        }
+
+        function backMain() {
+            alert("under development");
+        }
+    </script>
+</body>
+</html>
