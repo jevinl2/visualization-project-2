@@ -1,6 +1,6 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <head>
-    <title>Mileage Comparison</title>
+    <title>The Title Goes Here</title>
 </head>
 <script src='https://d3js.org/d3.v5.min.js'></script>
 <script src="https://rawgit.com/susielu/d3-annotation/master/d3-annotation.js"></script>
@@ -67,7 +67,7 @@
     </svg>
     <div class="cylndDiv">
         <p>
-            <h2><b>Mileage Comparison on Engine Cylinders Made by Different Manufacturers</b></h2>
+            <h2><b>Mileage Comparison on Engine Cylinders Made by Different manufacturers</b></h2>
             The circles represent the number of car cylinders in arrangment from smallest to largest the size of the circle. Click on a circle below to view gas mileages of an engine cylinder by the most popular car brands.
         </p>
     </div>
@@ -100,7 +100,7 @@
                 //}
 
                 //=========================================================================
-                // munipulate data by group and sum, filter, etc.
+                // manipulate data by group and sum, filter, etc.
                 //=========================================================================
 
                 // get all distinct names of manufacturers
@@ -189,6 +189,10 @@
                 y_domain = [10, 150]
                 y_ticks = [10, 20, 50, 100, 150]
                 y_range = [0, height];
+                colors = ["#ffffff", "0", "#d5d5d5", "#b0b0b0", "#ababab", "0", "#818181", "0", "#575757", "0", "#2d2d2d", "0", "#030303"];
+                var sqrtScale = d3.scaleSqrt()
+                    .domain([0, 100])
+                    .range([0, 30])
 
                 var x_log = d3.scaleLog()
                     .domain(x_domain)
@@ -206,8 +210,9 @@
                     //.data(allAgregation)
                     .data(fullData)             //attach the data
                     .enter().append('circle')   //append one circle for each data point
+                    .style('fill', function(d) { return colors[d.cylinders]; })    // color code for number of cylinders
                     .attr('class', 'circle')    //give each circle class Circle
-                    .attr('r', 8)               //assign radius
+                    .attr('r', 8)            //assign radius
                     // Position the circles based on their x and y attributes.
                     .attr("cx", function (d) { return x_log(d.cityMPG); })
                     .attr("cy", function (d) { return height - y_log(d.highwayMPG); })
@@ -271,14 +276,16 @@
                 const annotations = [
                     {
                         note: {
-                            label: "The number represents a car cylinders",
+                            label: "The color represents the number of cylinders, matched by the key below",
                             title: "Engine Cylinders"
                         },
                         x: 100,
                         y: 100,
-                        //dy: 20,
-                        //dx: 20,
-                        type: d3.annotationCalloutRect //d3.annotationCalloutElbow //
+                        subject: {
+                            width: 120,
+                            height: 150
+                        },
+                        type: d3.annotationCalloutRect//d3.annotationCalloutElbow //
                     }
                 ]
 
@@ -356,6 +363,8 @@
                     .style("border-width", "2px")
                     .style("border-radius", "5px")
                     .style("padding", "5px");
+                
+                var colors = ["#ffffff", "0", "#d5d5d5", "#b0b0b0", "#ababab", "0", "#818181", "0", "#575757", "0", "#2d2d2d", "0", "#030303"]
 
                 var svg = d3.select('#cylinder')
                 //.attr("width", 500)
@@ -370,6 +379,7 @@
                 svg.selectAll('cylcircle')
                     .data(myData)
                     .enter().append('circle')
+                    .style('fill', function(d) { return colors[d]; })
                     .attr('class', 'cylcircle')
                     //.style("fill", function (d) { return colors[d]; });
                     //.join('cylcircle')
